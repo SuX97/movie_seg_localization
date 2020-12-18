@@ -1,4 +1,5 @@
 *.mkv
 *.mp4
 *.jpg
-__pycache__
+*/__pycache__
+*/.DS_Store
