@@ -1,0 +1,27 @@
+{
+    "remotePath": "/lustre/xusu/Tasks/movie_seg_localization",
+    "host": "10.198.8.31",
+    "username": "xusu",
+    "password": "nianjiNO.1",
+    "port": 21,
+    "secure": false,
+    "protocol": "ftp",
+    "uploadOnSave": false,
+    "passive": false,
+    "debug": false,
+    "privateKeyPath": null,
+    "passphrase": null,
+    "agent": null,
+    "allow": [],
+    "ignore": [
+        "\\.vscode",
+        "\\.git",
+        "\\.DS_Store"
+    ],
+    "generatedFiles": {
+        "extensionsToInclude": [
+            ""
+        ],
+        "path": ""
+    }
+}
