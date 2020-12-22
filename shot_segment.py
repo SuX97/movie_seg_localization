@@ -175,7 +175,7 @@ def findCutPointsPairs(sequence):
 
 
 
-def shot_segment(videofile):
+def shot_segment(videofile, target_dir):
     """
     Detect Pan/Tilt/Zoom camera motion
     """
@@ -217,64 +217,20 @@ def shot_segment(videofile):
     c= 0
     p0 = None # 初始特征点
     while(ret):
+        save_lists.append(curr_frame)
         startTime = time.clock()
-        # 预处理
-        if useLUV:
-            curr_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2LUV)
-            curr_frame = cv2.GaussianBlur(frame, (5, 5), 1.5)
-        if useSSIM or useOF or useE or useInt:
-            # ssim of E用灰度
-            curr_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+        curr_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2LUV)
+        curr_frame = cv2.GaussianBlur(frame, (5, 5), 1.5)
+
         if curr_frame is not None and prev_frame is not None and i % sampling_rate == 0:
-            #logic here
-            #print("Processing Frame num:{}".format(i))
-            if useLUV:
-                count = detWithLUV(frame_diffs, time_lists, i, fps, curr_frame, prev_frame)
-            if useSSIM:
-                count = detWithSSIM(frame_diffs, time_lists, i, fps, curr_frame, prev_frame)
-            # if useOF:
-            #     (count, p0, a, b, c) = detWithOpticFlow(frame_diffs, time_lists, i, fps, curr_frame, prev_frame, p0)
-            #     #print(len(p0))
-            if useE:
-                count, p0 = detWithEssentialMat(frame_diffs, time_lists, i, fps, curr_frame, prev_frame, p0)
-            # if useInt:
-            #     count = detWithInt(frame_diffs, time_lists, i, fps, curr_frame, prev_frame)
+            count = detWithLUV(frame_diffs, time_lists, i, fps, curr_frame, prev_frame)
+            # if useSSIM:
+            #     count = detWithSSIM(frame_diffs, time_lists, i, fps, curr_frame, prev_frame)
         count_time_list.append(time.clock() - startTime)
-        # 迭代
         prev_frame = curr_frame
         i = i + 1
         ret, frame = cap.read()
-        thresholdDict = {"LUV": [0, 0.1e7, 0.4e7],
-                         "SSIM": [0, 0.4, 0.7],
-                         "SSIM_s": [0, 0, 0],
-                         "OF": [0, 0.02, 0.04],
-                         "E": [0, 0 ,0]
-        }
-        # if frame is not None:
-            #frame = cv2.resize(frame, (400, 400), interpolation=cv2.INTER_CUBIC)
-            # if visualize:
-            #     cv2.namedWindow("frame",0)
-            #     #cv2.resizeWindow("frame", 640, 480)
-            #     if useLUV:
-            #         th = thresholdDict["LUV"]
-            #     if useSSIM:
-            #         th = thresholdDict["SSIM"]
-            #     if useOF:
-            #         th = thresholdDict["OF"]
-            #         #print(type(p0))
-            #         if p0 is not None:
-            #             #print("Draw {} points on the frame".format(len(p0)))
-            #             for j, new in enumerate(p0):
-            #                 a,b = new.ravel()
-            #                 frame = cv2.circle(frame,(a,b),5,color[j].tolist(),-1)
-            #     if useE:
-            #         th = thresholdDict["E"]
-            #     cv2.rectangle(frame, (30,30), (width-30, height-30), ( 255 * (1 - count / 0.04), 0, 255 * (count / 0.04)), 20) # Red
-            #     cv2.putText(frame,'p:{:.2f}|t:{:.2f}|z:{:.2f}'.format(a, b, c),(20,30),cv2.FONT_HERSHEY_COMPLEX,1,(0,0,255),5)
-            #     cv2.imshow('frame',frame)
-            #     save_lists.append(frame)
-            #     if cv2.waitKey(1) & 0xFF == ord('q'):
-            #         break
+
     frame_diffs = np.array(frame_diffs)
     frame_diffs = smooth(frame_diffs, window_len=4)
     cutPoints = []
@@ -284,12 +240,12 @@ def shot_segment(videofile):
     for i in cutPoints:
         print("{:.2f}".format(i * videoLength))
     '''
-    cv2.destroyAllWindows()
     cap.release()
-    #plt.figure()
-    #plt.plot(time_lists, frame_diffs)
-    #plt.show()
-    #out = cv2.VideoWriter('project.avi',cv2.VideoWriter_fourcc(*'DIVX'), 15, (400, 400))
+    for i, cp in enumerate(cutPoints):
+        shot_path = target_dir + 'shot_{i}.mp4' 
+        out = cv2.VideoWriter(shot_path, cv2.VideoWriter_fourcc(fourcc), fps, (height, width))
+        out.write(save_lists[int(cp * len(save_lists))])
+    out.release()
     '''
     for i in range(len(save_lists)):
         out.write(save_lists[i])
@@ -301,11 +257,12 @@ def shot_segment(videofile):
 def main():
     if len(sys.argv) > 1:
         video = sys.argv[1]
+        target_dir = sys.argv[2]
     else:
         print("Video file must be specified.")
         sys.exit(-1)
     start = time.time()
-    shot_segment(video)
+    shot_segment(video, target_dir)
     end = time.time()
     print("Running time: {:.4f}".format(end - start))
 if __name__ == "__main__":
