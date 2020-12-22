@@ -3,3 +3,5 @@
 *.jpg
 */__pycache__
 */.DS_Store
+ftp-sync.json
+.DS_Store
