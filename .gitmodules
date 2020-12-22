@@ -1,0 +1,3 @@
+[submodule "Shot_Segmentation"]
+	path = Shot_Segmentation
+	url = https://github.com/BitFloyd/Shot_Segmentation.git

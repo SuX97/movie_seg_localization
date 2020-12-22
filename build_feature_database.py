@@ -1,3 +1,4 @@
+# build CNN feature for each videos
 import lmdb
 import numpy as np
 import torchvision
@@ -51,10 +52,10 @@ def extract_frame_features(v_path):
     for i in tqdm(range(len(vframes))):
         test_frames = vframes[i]
         if frame_feature is not None:
-            frame_feature = torch.cat((frame_feature, shufflenet(test_frames)), 0)
+            frame_feature = torch.cat((frame_feature, shufflenet(test_frames).detach().cpu()), 0)
         else:
-            frame_feature = shufflenet(test_frames)
-    return np.array(frame_feature.detach().cpu())
+            frame_feature = shufflenet(test_frames).detach().cpu()
+    return np.array(frame_feature)
 
 def dump_lmdb(env, video_id, db_path, feature_data):
     with env.begin(write=True) as txn:
@@ -72,15 +73,16 @@ def parse_args():
 
 def build_feature_databse():
     args = parse_args()
-    env = lmdb.open(args.result_root, map_size=109951000) # 1TB
+    env = lmdb.open(args.result_root, map_size=1099510000) # 1GB
     segment_list = glob.glob(osp.join(args.videos_root, '*', 'segments', '*'))
     origin_video_list = glob.glob(osp.join(args.videos_root, '*', 'original', '*'))
     print(segment_list)
     print(origin_video_list)
-    for v_path in segment_list:
+    for v_path in (segment_list + origin_video_list):
         print(f'extracting {v_path}')
         v_feature = extract_frame_features(v_path)
         dump_lmdb(env, osp.basename(v_path), args.result_root, v_feature)
+
 
     env.close()
 
