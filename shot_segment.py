@@ -4,16 +4,15 @@ import matplotlib.pyplot as plt
 import sys
 from scipy.signal import convolve2d
 from skmultiflow.drift_detection import PageHinkley
-from sklearn.preprocessing import MinMaxScaler
-from scipy.optimize import leastsq
-from scipy.optimize import curve_fit
 import numpy as np
 import math
 import time
 import cv2
+import os
 import time
 from PIL import Image  
 import json
+import os.path as osp
 feature_params = dict( maxCorners = 100,
                     qualityLevel = 0.25,
                     minDistance = 7,
@@ -22,9 +21,7 @@ feature_params = dict( maxCorners = 100,
 lk_params = dict( winSize  = (15,15),
                 maxLevel = 2,
                 criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-"""
-Helper function
-"""
+
 def smooth(x, window_len=13, window='hanning'):
     """
     smooth the 1-D sequence data using a window with requested size.
@@ -176,28 +173,14 @@ def findCutPointsPairs(sequence):
 
 
 def shot_segment(videofile, target_dir):
-    """
-    Detect Pan/Tilt/Zoom camera motion
-    """
-    # display images for debugging/troubleshooting
-    visualize = False
-    useLUV = True
-    useSSIM = False
-    useOF = False
-    useE = False
-    useInt = False
-    # frames per second (skip other frames)
-    sampling_rate = 1
     cap = cv2.VideoCapture(videofile)
     fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
     fps = cap.get(cv2.CAP_PROP_FPS)
-    totFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    videoLength = float(totFrames) / float(fps)
+    # totFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
     # if unavailable, by default 30.0
     if fps <= 0.0 or math.isnan(fps):
         fps = 30.0
-    color = np.random.randint(0,255,(200,3))
     curr_frame = None
     prev_frame = None
     frame_diffs = []
@@ -211,40 +194,38 @@ def shot_segment(videofile, target_dir):
     curr_frame = frame
     count_time_list = []
     i = 1.0
-    count = 0
-    a = 0
-    b= 0
-    c= 0
-    p0 = None # 初始特征点
     while(ret):
-        save_lists.append(curr_frame)
-        startTime = time.clock()
+        save_lists.append(frame)
         curr_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2LUV)
-        curr_frame = cv2.GaussianBlur(frame, (5, 5), 1.5)
-
-        if curr_frame is not None and prev_frame is not None and i % sampling_rate == 0:
+        # curr_frame = cv2.GaussianBlur(curr_frame, (5, 5), 1.5)
+        if curr_frame is not None and prev_frame is not None:
             count = detWithLUV(frame_diffs, time_lists, i, fps, curr_frame, prev_frame)
             # if useSSIM:
             #     count = detWithSSIM(frame_diffs, time_lists, i, fps, curr_frame, prev_frame)
-        count_time_list.append(time.clock() - startTime)
         prev_frame = curr_frame
         i = i + 1
         ret, frame = cap.read()
 
     frame_diffs = np.array(frame_diffs)
+    print(frame_diffs)
+    np.save('scores.npy', frame_diffs)
     frame_diffs = smooth(frame_diffs, window_len=4)
     cutPoints = []
     cutPoints = findCutPointsPairs(frame_diffs)
-    #print("Cut points at" )
-    '''
+    print("Cut points at" )
     for i in cutPoints:
-        print("{:.2f}".format(i * videoLength))
-    '''
+        print("{:.2f}".format(i))
+
+
     cap.release()
     for i, cp in enumerate(cutPoints):
-        shot_path = target_dir + 'shot_{i}.mp4' 
-        out = cv2.VideoWriter(shot_path, cv2.VideoWriter_fourcc(fourcc), fps, (height, width))
-        out.write(save_lists[int(cp * len(save_lists))])
+        if i == 0:
+            continue
+        shot_path = osp.join(target_dir, osp.basename(videofile) +f'_shot_{i}.mp4')
+        out = cv2.VideoWriter(shot_path, cv2.VideoWriter_fourcc('F', 'M', 'P', '4'), fps, (width, height))
+        for f in save_lists[int(round(cutPoints[i - 1] * len(save_lists))) : int(round(cp * len(save_lists)))]:
+            out.write(f)
+        # out.write(save_lists[ int(cutPoints[i - 1] * len(save_lists)) : int(cp * len(save_lists))])
     out.release()
     '''
     for i in range(len(save_lists)):
@@ -262,6 +243,10 @@ def main():
         print("Video file must be specified.")
         sys.exit(-1)
     start = time.time()
+
+    if not osp.exists(target_dir):
+        os.makedirs(target_dir)
+
     shot_segment(video, target_dir)
     end = time.time()
     print("Running time: {:.4f}".format(end - start))
