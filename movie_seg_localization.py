@@ -7,9 +7,11 @@ import os.path as osp
 import glob
 import argparse
 from tqdm import tqdm
-
+import json
 from pdb import set_trace as st
 from sklearn.metrics.pairwise import cosine_similarity
+
+EPSILON = 1e-5
 
 
 def parse_args():
@@ -24,26 +26,55 @@ def parse_args():
 
 
 def load_lmdb_feature(txn, original_video_ids, shot_video_ids):
-    original_features = [np.reshape(txn.get(i), (-1, 1000)) for i in original_video_ids]
-    shot_features = [np.reshape(txn.get(i), (-1, 1000)) for i in shot_video_ids]
-
-    return np.array(original_features), np.array(shot_features)
+    # original_features = [np.reshape(txn.get(i.encode()), (-1, 1000)) for i in original_video_ids]
+    # shot_features = [np.reshape(txn.get(i.encode()), (-1, 1000)) for i in shot_video_ids]
+    original_features = np.frombuffer(txn.get(original_video_ids.encode()), dtype=np.float32)
+    shot_features = np.frombuffer(txn.get(shot_video_ids.encode()), dtype=np.float32)
+    return original_features, shot_features
 
 def calculate_similarity(f1, f2):
-    
+    f1 = np.reshape(f1, (-1, 1000))
+    f2 = np.reshape(f2, (-1, 1000))
+
     if f1.shape[1] != f2.shape[1]:
         raise ValueError
 
     cos_sim = cosine_similarity(f1, f2)
-    st()
 
     return cos_sim
 
 
-def generate_result_dict(sim_map):
-    window_size = sim_map.shape[0]
-    start_idx = np.arange(0, sim_map.shape[1] - window_size)
-    
+def write_result_dict(ret_dict, ori_id, sim_map, shot_id):
+    ori_length = sim_map.shape[0]
+    window_size = sim_map.shape[1]
+    start_idx = np.arange(0, ori_length - window_size)
+    # n x N -> 1 x N
+    sim_map = np.sum(sim_map, axis=1)
+    scores = [np.sum(sim_map[i: (i + window_size)])for i in start_idx]
+    best_start_id = np.argmax(scores)
+    segment_dict = {'start' : float(best_start_id / ori_length),
+                    'end' : float((best_start_id + window_size) / ori_length),
+                    'score' : float(scores[best_start_id]),
+                    'shot_id' : shot_id
+                    }
+
+    if ori_id in ret_dict:
+        ret_dict[ori_id].append(segment_dict)
+    else:
+        ret_dict[ori_id] = list([segment_dict])
+
+def _merge(ret_dict):
+    for ori_id in ret_dict.keys():
+        merged_result = []
+        ret_dict[ori_id] = sorted(ret_dict[ori_id], key=lambda x:x['start'])
+        for i, shot_i in enumerate(ret_dict[ori_id]):
+            if len(merged_result) == 0 or merged_result[-1]['end'] < shot_i['start']:
+                shot_i['shot_id'] = [shot_i['shot_id']]
+                merged_result.append(shot_i)
+            else:
+                merged_result[-1]['end'] = max(merged_result[-1]['end'], shot_i['end'])
+                merged_result[-1]['shot_id'].append(shot_i['shot_id'])
+        ret_dict[ori_id] = merged_result  
 
 def parse_file_list(video_root):
     video_id_dirs = glob.glob(osp.join(video_root, '*'))
@@ -61,15 +92,28 @@ def parse_file_list(video_root):
 def movie_seg_localization():
     env = lmdb.open(args.db_root, map_size=int(1e9))
     original_shot_dict = parse_file_list(args.video_root)
-    st()
     dict_out = dict()
     with env.begin() as txn:
         for k, v in original_shot_dict.items():
-            original_features, shot_features = load_lmdb_feature(txn, v['original'], v['shots'])
-            similarity_map = calculate_similarity(original_features, shot_features)
-            st()
-
-
+            # looping all TV-series
+            for shot_id in v['shots']:
+                # looping all shots
+                max_sim = -1
+                max_sim_ori_id = None
+                for ori_id in v['original']:
+                    # looping all episode of the series
+                    ori_feature, shot_feature = load_lmdb_feature(txn, ori_id, shot_id)
+                    sim = calculate_similarity(ori_feature, shot_feature)
+                    if np.max(sim) >= max_sim:
+                        max_sim = np.max(sim)
+                        max_sim_map = sim
+                        max_sim_ori_id = ori_id
+                write_result_dict(dict_out, max_sim_ori_id, max_sim_map, shot_id)
+    _merge(dict_out)
+    for k, v in dict_out.items():
+        print(f'Original video {k} was annotated {len(v)} shots')
+    with open(args.out, 'w') as f_out:
+        json.dump(dict_out, f_out, indent=4)
 
 if __name__ == '__main__':
     args = parse_args()
