@@ -100,8 +100,7 @@ def detWithEssentialMat(_frame_diffs, _time_lists, _i, _fps, _curr_frame, _prev_
 
 
 def detWithLUV(_frame_diffs, _time_lists, _i, _fps, _curr_frame, _prev_frame):
-    """
-        LUV color space can do better to distinguish the difference between pictures
+    """LUV color space can do better to distinguish the difference between pictures
     """
     diff = 0
     diff = cv2.absdiff(_curr_frame, _prev_frame)

@@ -10,9 +10,9 @@ from tqdm import tqdm
 import json
 from pdb import set_trace as st
 from sklearn.metrics.pairwise import cosine_similarity
-
+from moviepy.editor import VideoFileClip
 EPSILON = 1e-5
-
+from datetime import timedelta
 
 def parse_args():
     parser = argparse.ArgumentParser(description='automatic annotation')
@@ -44,16 +44,16 @@ def calculate_similarity(f1, f2):
     return cos_sim
 
 
-def write_result_dict(ret_dict, ori_id, sim_map, shot_id):
+def write_result_dict(ret_dict, ori_id, sim_map, shot_id, duration):
     ori_length = sim_map.shape[0]
     window_size = sim_map.shape[1]
     start_idx = np.arange(0, ori_length - window_size)
     # n x N -> 1 x N
-    sim_map = np.sum(sim_map, axis=1)
-    scores = [np.sum(sim_map[i: (i + window_size)])for i in start_idx]
+    sim_map = np.average(sim_map, axis=1)
+    scores = [np.average(sim_map[i: (i + window_size)])for i in start_idx]
     best_start_id = np.argmax(scores)
-    segment_dict = {'start' : float(best_start_id / ori_length),
-                    'end' : float((best_start_id + window_size) / ori_length),
+    segment_dict = {'start' : str(timedelta(seconds=int(best_start_id / ori_length * duration))),
+                    'end' : str(timedelta(seconds=int((best_start_id + window_size) / ori_length * duration))),
                     'score' : float(scores[best_start_id]),
                     'shot_id' : shot_id
                     }
@@ -74,6 +74,7 @@ def _merge(ret_dict):
             else:
                 merged_result[-1]['end'] = max(merged_result[-1]['end'], shot_i['end'])
                 merged_result[-1]['shot_id'].append(shot_i['shot_id'])
+                # FIXME: scores is not true
         ret_dict[ori_id] = merged_result  
 
 def parse_file_list(video_root):
@@ -108,7 +109,11 @@ def movie_seg_localization():
                         max_sim = np.max(sim)
                         max_sim_map = sim
                         max_sim_ori_id = ori_id
-                write_result_dict(dict_out, max_sim_ori_id, max_sim_map, shot_id)
+                        # st()
+                        ori_path = glob.glob(osp.join(args.video_root, '*', 'original', f"{ori_id}*"))[0]
+                        clip_ori = VideoFileClip(ori_path)
+                        ori_duration = clip_ori.duration
+                write_result_dict(dict_out, max_sim_ori_id, max_sim_map, shot_id, ori_duration)
     _merge(dict_out)
     for k, v in dict_out.items():
         print(f'Original video {k} was annotated {len(v)} shots')
