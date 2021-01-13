@@ -2,7 +2,7 @@
     "remotePath": "/lustre/xusu/Tasks/movie_seg_localization",
     "host": "10.198.8.31",
     "username": "xusu",
-    "password": "nianjiNO.1",
+    "password": "nianjiNO.0",
     "port": 21,
     "secure": false,
     "protocol": "ftp",

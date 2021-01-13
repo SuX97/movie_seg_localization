@@ -1,3 +1,8 @@
+# MovieSegLocalization
+> Automatically annotate highlight clips in long videos thanks to millions of TikTok bloggers.
+
+![image](https://github.com/SuX97/movie_seg_localization/blob/main/demo.gif)
+
 # Problem Definition
 Given a video summarization $v_{s}$, first using HOG video segmentation to divide into shots $ s_{i} $.
 Each shots then generates a stack of features and their avg $ 1/N * \sum f_{i} $. The segment is then reformatted to a matrix mxK. $m_{seg}$
